@@ -1,11 +1,15 @@
 import factory
 import json
+import logging
 import requests
 from time import sleep
 from threading import Thread
 from faker import Faker
 from flask import Flask
 
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 fake = Faker()
 
@@ -33,7 +37,7 @@ class PullRequestFactory(factory.DictFactory):
 
 
 class DeploymentFactory(factory.DictFactory):
-    id = fake.uuid4()
+    id = factory.Faker('uuid4')
     commits = []
     status = 'queued'
     stacktrace = None
@@ -45,7 +49,6 @@ def generate_commits():
 def generate_pull_requests(all_pull_requests, all_commits):
     commits_in_prs = [commit['sha'] for pull_request in all_pull_requests for commit in pull_request['commits']]
     commits_without_prs = [commit for commit in all_commits if commit['sha'] not in commits_in_prs]
-    print(commits_without_prs)
     prs = []
     for _ in range(fake.pyint(max_value=4)):
         commit_count = fake.pyint(min_value=1, max_value=3)
@@ -63,6 +66,7 @@ def close_pull_requests(all_pull_requests):
     for _ in range(fake.pyint(max_value=len(open_prs))):
         pr_to_close = fake.random_element(open_prs)
         pr_to_close['status'] = 'merged'
+        logger.info('PR merged', pr_to_close)
 
 
 def generate_deployment(all_deployments, all_pull_requests, all_already_deployed_prs):
@@ -83,16 +87,20 @@ def complete_deployments(all_deployments):
     if not queued_deployments:
         return
     deployment_to_complete = fake.random_element(queued_deployments)
-    deployment_to_complete['status'] = 'active' if fake.pyint(max_value=10) > 5 else 'failed'
+    deployment_to_complete['status'] = 'active' if fake.pyint(max_value=10) > 1 else 'failed'
     if deployment_to_complete['status'] == 'failed':
         deployment_to_complete['stacktrace'] = fake.paragraph()
-        print('Deployment failed')
-        requests.post('http://localhost:8000', json={
-            'deployment': json.dumps(deployment_to_complete)
-        })
+        logger.info('Deployment failed')
+        try:
+            requests.post('http://host.docker.internal:8000', json={
+                'deployment': json.dumps(deployment_to_complete)
+            })
+        except requests.exceptions.RequestException:
+            logger.exception('Failed to send notification')
     else:
+        logger.info('Deployment succeeded %s', deployment_to_complete['id'])
         # This really should be only one...
-        active_deployments = [deployment for deployment in all_deployments if deployment['status'] == 'active']
+        active_deployments = [deployment for deployment in all_deployments if deployment['status'] == 'active' and deployment['id'] != deployment_to_complete['id']]
         for deployment in active_deployments:
             deployment['status'] = 'stale'
     

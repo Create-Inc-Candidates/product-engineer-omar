@@ -1,0 +1,12 @@
+version: "3.7"
+services:
+  # Server
+  app:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    ports:
+      - 5000:5000
+    command: flask --app app run --host 0.0.0.0
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
