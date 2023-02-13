@@ -5,7 +5,7 @@ import requests
 from time import sleep
 from threading import Thread
 from faker import Faker
-from flask import Flask
+from flask import Flask, request
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -20,6 +20,7 @@ commits_list = []
 pull_requests_list = []
 deployments_list = []
 already_deployed_prs = []
+incidents_list = []
 
 creator_author = 'Createy McCreateFace'
 
@@ -33,6 +34,7 @@ class CommitFactory(factory.DictFactory):
 
 class PullRequestFactory(factory.DictFactory):
     status = 'open'
+    title = factory.Faker('sentence')
     commits = []
 
 
@@ -40,15 +42,14 @@ class DeploymentFactory(factory.DictFactory):
     id = factory.Faker('uuid4')
     commits = []
     status = 'queued'
-    stacktrace = None
 
 
 def generate_commits():
     return CommitFactory.build_batch(fake.pyint(max_value=10))
 
 def generate_pull_requests(all_pull_requests, all_commits):
-    commits_in_prs = [commit['sha'] for pull_request in all_pull_requests for commit in pull_request['commits']]
-    commits_without_prs = [commit for commit in all_commits if commit['sha'] not in commits_in_prs]
+    commits_in_prs = [commit for pull_request in all_pull_requests for commit in pull_request['commits']]
+    commits_without_prs = [commit['sha'] for commit in all_commits if commit['sha'] not in commits_in_prs]
     prs = []
     for _ in range(fake.pyint(max_value=4)):
         commit_count = fake.pyint(min_value=1, max_value=3)
@@ -89,20 +90,20 @@ def complete_deployments(all_deployments):
     deployment_to_complete = fake.random_element(queued_deployments)
     deployment_to_complete['status'] = 'active' if fake.pyint(max_value=10) > 1 else 'failed'
     if deployment_to_complete['status'] == 'failed':
-        deployment_to_complete['stacktrace'] = fake.paragraph()
         logger.info('Deployment failed')
-        try:
-            requests.post('http://host.docker.internal:8000', json={
-                'deployment': json.dumps(deployment_to_complete)
-            })
-        except requests.exceptions.RequestException:
-            logger.exception('Failed to send notification')
     else:
         logger.info('Deployment succeeded %s', deployment_to_complete['id'])
         # This really should be only one...
         active_deployments = [deployment for deployment in all_deployments if deployment['status'] == 'active' and deployment['id'] != deployment_to_complete['id']]
         for deployment in active_deployments:
             deployment['status'] = 'stale'
+    try:
+        requests.post('http://host.docker.internal:8000/webhooks', json={
+            'deployment': json.dumps(deployment_to_complete),
+            'stacktrace': fake.paragraph()
+        })
+    except requests.exceptions.RequestException:
+        logger.exception('Failed to send notification')
     
 
 def run_loop(deployments_list, pull_requests_list, commits_list, already_deployed_prs):
@@ -120,22 +121,46 @@ def run_loop(deployments_list, pull_requests_list, commits_list, already_deploye
         do_inner_loop()
         sleep(5)
         do_inner_loop()
-        complete_deployments(deployments_list)
+        if incidents:
+            complete_deployments(deployments_list)
         sleep(5)
 
 
-thread = Thread(target=run_loop, args=(deployments_list, pull_requests_list, commits_list, already_deployed_prs,))
+thread = Thread(target=run_loop, args=(deployments_list, pull_requests_list, commits_list, already_deployed_prs, incidents_list,))
 thread.start()
 
 
-@app.route("/commits")
+@app.route("/commits", methods=["GET"])
 def commits():
     return commits_list
 
-@app.route("/pull-requests")
+@app.route("/pull-requests", methods=["GET"])
 def pull_requests():
     return pull_requests_list
 
-@app.route("/deployments")
+@app.route("/deployments", methods=["GET"])
 def deployments():
     return deployments_list
+
+@app.route("/incidents", methods=["POST"])
+def incidents():
+    data = request.get_json()
+    new_incident = {
+        'id': fake.uuid4(),
+        **data
+    }
+    incidents.append(new_incident)
+    logger.info('Incidents: %s', incidents)
+    return new_incident
+
+@app.route("/resolutions", methods=["POST"])
+def resolutions():
+    data = request.get_json()
+    incidents = .remove() = data['incident_id']
+    for incident in incidents_list:
+        
+
+    incidents.append(new_incident)
+    logger.info('Incidents: %s', incidents)
+    return new_incident
+
