@@ -99,7 +99,7 @@ def complete_deployments(all_deployments):
             deployment['status'] = 'stale'
     try:
         requests.post('http://host.docker.internal:8000/webhooks', json={
-            'deployment': json.dumps(deployment_to_complete),
+            'deployment': deployment_to_complete,
             'stacktrace': fake.paragraph()
         })
     except requests.exceptions.RequestException:
