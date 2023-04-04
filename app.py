@@ -106,7 +106,7 @@ def complete_deployments(all_deployments):
         logger.exception('Failed to send notification')
     
 
-def run_loop(deployments_list, pull_requests_list, commits_list, already_deployed_prs):
+def run_loop(deployments_list, pull_requests_list, commits_list, already_deployed_prs, incidents_list):
     def do_inner_loop():
         new_commits = generate_commits()
         commits_list.extend(new_commits)
@@ -121,7 +121,7 @@ def run_loop(deployments_list, pull_requests_list, commits_list, already_deploye
         do_inner_loop()
         sleep(5)
         do_inner_loop()
-        if incidents:
+        if incidents_list:
             complete_deployments(deployments_list)
         sleep(5)
 
@@ -149,18 +149,14 @@ def incidents():
         'id': fake.uuid4(),
         **data
     }
-    incidents.append(new_incident)
-    logger.info('Incidents: %s', incidents)
+    incidents_list.append(new_incident)
+    logger.info('Incidents: %s', incidents_list)
     return new_incident
 
 @app.route("/resolutions", methods=["POST"])
 def resolutions():
     data = request.get_json()
-    incidents = .remove() = data['incident_id']
-    for incident in incidents_list:
-        
-
-    incidents.append(new_incident)
-    logger.info('Incidents: %s', incidents)
-    return new_incident
+    existing_incident = next((incident for incident in incidents_list if incident['id'] == data['incident_id']), None)
+    incidents_list.remove(existing_incident)
+    return {}
 
