@@ -121,7 +121,7 @@ def run_loop(deployments_list, pull_requests_list, commits_list, already_deploye
         do_inner_loop()
         sleep(5)
         do_inner_loop()
-        if incidents_list:
+        if not incidents_list:
             complete_deployments(deployments_list)
         sleep(5)
 
