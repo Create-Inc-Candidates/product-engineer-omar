@@ -145,9 +145,12 @@ def deployments():
 @app.route("/incidents", methods=["POST"])
 def incidents():
     data = request.get_json()
+    deployment_id = data['deployment_id']
+    message = data['message']
     new_incident = {
         'id': fake.uuid4(),
-        **data
+        'deployment_id': deployment_id,
+        'message': message,
     }
     incidents_list.append(new_incident)
     logger.info('Incidents: %s', incidents_list)
