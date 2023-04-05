@@ -17,9 +17,22 @@ def get_prs():
     user_prs = [ pr for pr in prs if set(pr["commits"]) & user_commit_hashes ]
     return user_prs
 
+def get_deployments():
+    deployments = requests.get(url_service + '/deployments').json()
+    return deployments
+
 @app.route("/pull-requests", methods=["GET"])
 def pulls():
-    return get_prs()
+    prs = get_prs()
+    deployments = get_deployments()
+    for pr in prs:
+        for deployment in deployments:
+            if set(pr['commits']) == set(deployment['commits']):
+                pr['deployment_status'] = deployment['status']
+        if 'deployment_status' not in pr:
+            pr['deployment_status'] = 'undeployed'
+    return prs
+
 
 @app.route("/list_of_issues", methods=["GET"])
 def list_of_issues():
