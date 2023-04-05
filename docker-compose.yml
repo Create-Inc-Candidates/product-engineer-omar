@@ -16,6 +16,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - 3000:5000
-    command: flask --app dashboard run --host 0.0.0.0
+    command: flask --app dashboard --debug run --host 0.0.0.0
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/home/appuser
