@@ -21,15 +21,43 @@ pull_requests_list = []
 deployments_list = []
 already_deployed_prs = []
 incidents_list = []
+time_entries_list = []
+issues_list = []
 
 creator_author = 'Createy McCreateFace'
+
+users = [
+    creator_author,
+    *[fake.name() for x in range(9)]
+]
+
+
+class IssueFactory(factory.DictFactory):
+    number = factory.Faker('pyint')
+    title = factory.Faker('sentence')
+    body = factory.Faker('paragraph')
+    
+    @factory.lazy_attribute
+    def assignee(self):
+        if fake.pyint(max_value=10) > 6:
+            return None
+        return fake.random_element(users)
+
+
+class TimeEntryFactory(factory.DictFactory):
+    start = factory.Faker('past_datetime')
+    end = None
+
+    @factory.lazy_attribute
+    def user(self):
+        return fake.random_element(users)
 
 class CommitFactory(factory.DictFactory):
     sha = factory.Faker('sha256')
 
     @factory.lazy_attribute
     def author(self):
-        return creator_author if fake.pyint(max_value=10) > 9 else fake.name()
+        return fake.random_element(users)
 
 
 class PullRequestFactory(factory.DictFactory):
@@ -61,6 +89,9 @@ def generate_pull_requests(all_pull_requests, all_commits):
             commits_to_add_pr.append(commits_without_prs.pop())
         prs.append(PullRequestFactory.build(commits=commits_to_add_pr, status='open'))
     return prs
+
+def generate_issues(all_issues):
+    return IssueFactory.build_batch(fake.pyint(max_value=10))
 
 def close_pull_requests(all_pull_requests):
     open_prs = [pr for pr in all_pull_requests if pr['status'] == 'open']
@@ -106,16 +137,29 @@ def complete_deployments(all_deployments):
         logger.exception('Failed to send notification')
     
 
-def run_loop(deployments_list, pull_requests_list, commits_list, already_deployed_prs, incidents_list):
+def run_loop(deployments_list, pull_requests_list, commits_list, already_deployed_prs, incidents_list, time_entries_list, issues_list):
     def do_inner_loop():
         new_commits = generate_commits()
         commits_list.extend(new_commits)
         new_prs = generate_pull_requests(pull_requests_list, commits_list)
+        new_issues = generate_issues(issues_list)
+        issues_list.extend(new_issues)
         pull_requests_list.extend(new_prs)
         close_pull_requests(pull_requests_list)
         new_deployment = generate_deployment(deployments_list, pull_requests_list, already_deployed_prs)
         if new_deployment:
             deployments_list.append(new_deployment)
+
+        if fake.pyint(max_value=10) > 8:
+            entry = TimeEntryFactory.build()
+            active_users = [time_entry['user'] for time_entry in time_entries_list if time_entry['end'] is None]
+            new_user = entry['user']
+            if new_user not in active_users:
+                time_entries_list.append(TimeEntryFactory.build())
+            else:
+                existing_entry = next((time_entry for time_entry in time_entries_list if time_entry['end'] is None and time_entry['user'] == new_user), None)
+                existing_entry['end'] = fake.date_time_between(existing_entry['start'], datetime.now())
+
 
     while True:
         do_inner_loop()
@@ -126,7 +170,7 @@ def run_loop(deployments_list, pull_requests_list, commits_list, already_deploye
         sleep(5)
 
 
-thread = Thread(target=run_loop, args=(deployments_list, pull_requests_list, commits_list, already_deployed_prs, incidents_list,))
+thread = Thread(target=run_loop, args=(deployments_list, pull_requests_list, commits_list, already_deployed_prs, incidents_list, time_entries_list, issues_list,))
 thread.start()
 
 
@@ -141,6 +185,22 @@ def pull_requests():
 @app.route("/deployments", methods=["GET"])
 def deployments():
     return deployments_list
+
+@app.route("/time-entries", methods=["GET"])
+def time_entries():
+    return time_entries_list
+
+@app.route("/issues", methods=["GET"])
+def issues():
+    return issues_list
+
+@app.route("/assign-issue", methods=["POST"])
+def assign_issue():
+    data = request.get_json()
+    existing_issue = next((issue for issue in issues_list if issue['id'] == data['issue_id']), None)
+    existing_issue['assignee'] = data['assignee']
+    return existing_issue
+
 
 @app.route("/incidents", methods=["POST"])
 def incidents():
