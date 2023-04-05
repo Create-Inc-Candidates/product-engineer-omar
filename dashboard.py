@@ -26,3 +26,9 @@ def list_of_issues():
     r = requests.get(url_service + '/issues').json()
     filtered_list = [i for i in r if i['assignee'] == creator_author]
     return filtered_list
+
+@app.route("/available-issues", methods=["GET"])
+def available_issues():
+    r = requests.get(url_service + '/issues').json()
+    filtered_list = [i for i in r if i['assignee'] is None]
+    return filtered_list
